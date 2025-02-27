@@ -1,4 +1,4 @@
-name: Deploy Nginx to EKS
+name: Deploy Nginx to EKS with Secrets from AWS Secrets Manager
 
 on:
   push:
@@ -9,6 +9,7 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout Repository
         uses: actions/checkout@v3
@@ -20,19 +21,42 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
 
+      - name: Install jq
+        run: |
+          sudo apt-get update && sudo apt-get install -y jq
+
+      - name: Retrieve AWS Keys from Secrets Manager
+        id: get_secret
+        run: |
+          # Fetch the secret stored in AWS Secrets Manager (MyAWSKeys)
+          secret_json=$(aws secretsmanager get-secret-value --secret-id mysecret --query SecretString --output text)
+          echo "Retrieved secret JSON: $secret_json"
+          
+          # Parse the secret JSON (assumes JSON structure with keys: aws_access_key and aws_secret_key)
+          ACCESS_KEY=$(echo "$secret_json" | jq -r '.aws_access_key')
+          SECRET_KEY=$(echo "$secret_json" | jq -r '.aws_secret_key')
+          
+          # Set the parsed values as outputs for later steps
+          echo "aws_access_key=$ACCESS_KEY" >> $GITHUB_OUTPUT
+          echo "aws_secret_key=$SECRET_KEY" >> $GITHUB_OUTPUT
+
       - name: Install kubectl
         run: |
           curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
           chmod +x kubectl
           sudo mv kubectl /usr/local/bin/
 
-      - name: Update Kubeconfig
-        run: aws eks update-kubeconfig --name nginx-cluster --region us-east-1
-
-      - name: Deploy Nginx
+      - name: Update kubeconfig
         run: |
+          aws eks update-kubeconfig --name nginx-cluster --region us-east-1
+
+      - name: Deploy Nginx Manifests
+        run: |
+          # Apply Kubernetes manifests for Nginx deployment and service
           kubectl apply -f k8s/nginx-deployment.yaml
           kubectl apply -f k8s/nginx-service.yaml
 
       - name: Verify Deployment
-        run: kubectl rollout status deployment/nginx
+        run: |
+          # Verify that the rolling update completed successfully
+          kubectl rollout status deployment/nginx-deployment
