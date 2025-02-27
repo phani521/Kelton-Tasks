@@ -53,8 +53,8 @@ jobs:
       - name: Deploy Nginx Manifests
         run: |
           # Apply Kubernetes manifests for Nginx deployment and service
-          kubectl apply -f /main/Task-2/K8s/nginx-deployment.yaml
-          kubectl apply -f /main/Task-2/K8s/nginx-service.yaml
+          kubectl apply -f Task-2/K8s/nginx-deployment.yaml
+          kubectl apply -f Task-2/K8s/nginx-service.yaml
 
       - name: Verify Deployment
         run: |
